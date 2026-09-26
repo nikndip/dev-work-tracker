@@ -12,6 +12,8 @@ import (
 
 	"dev-work-tracker/internal/config"
 	"dev-work-tracker/internal/httpserver"
+	"dev-work-tracker/internal/repository"
+	"dev-work-tracker/internal/service"
 	"dev-work-tracker/internal/storage"
 	telegrambot "dev-work-tracker/internal/telegram"
 )
@@ -42,7 +44,9 @@ func run(logger *slog.Logger) error {
 	defer pool.Close()
 	logger.Info("connected to PostgreSQL")
 
-	telegramBot, err := telegrambot.New(cfg.TelegramBotToken, cfg.TelegramAllowedUserID, logger)
+	repo := repository.New(pool)
+	appService := service.New(repo, cfg.DefaultHourlyRateKopecks, cfg.DefaultTimezone)
+	telegramBot, err := telegrambot.New(cfg.TelegramBotToken, cfg.TelegramAllowedUserID, appService, logger)
 	if err != nil {
 		return err
 	}
