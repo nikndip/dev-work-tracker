@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"dev-work-tracker/internal/domain"
 	"dev-work-tracker/internal/duration"
@@ -24,31 +25,50 @@ func BuildExcel(month time.Time, projectName string, entries []domain.WorkEntry,
 	const sheet = "Отчёт"
 	f.SetSheetName("Sheet1", sheet)
 
-	titleStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 18, Color: "1F4E78"}})
-	labelStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Color: "1F4E78"}})
+	lightBorder := []excelize.Border{
+		{Type: "left", Color: "D9E2F3", Style: 1}, {Type: "right", Color: "D9E2F3", Style: 1},
+		{Type: "top", Color: "D9E2F3", Style: 1}, {Type: "bottom", Color: "D9E2F3", Style: 1},
+	}
+	whiteFill := excelize.Fill{Type: "pattern", Color: []string{"FFFFFF"}, Pattern: 1}
+	totalFill := excelize.Fill{Type: "pattern", Color: []string{"DDEBF7"}, Pattern: 1}
+	darkFont := &excelize.Font{Family: "Arial", Size: 10, Color: "1F2937"}
+	moneyFormat := "#,##0.00"
+
+	titleStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Family: "Arial", Bold: true, Size: 16, Color: "1F4E78"}, Fill: whiteFill, Alignment: &excelize.Alignment{Vertical: "center"}})
+	metadataBackgroundStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill, Alignment: &excelize.Alignment{Vertical: "center"}})
+	labelStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Family: "Arial", Bold: true, Size: 10, Color: "1F4E78"}, Fill: whiteFill, Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"}})
+	metadataValueStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill, Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"}})
 	headerStyle, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Color: "FFFFFF"},
+		Font:      &excelize.Font{Family: "Arial", Bold: true, Size: 10, Color: "FFFFFF"},
 		Fill:      excelize.Fill{Type: "pattern", Color: []string{"4472C4"}, Pattern: 1},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
-		Border:    []excelize.Border{{Type: "left", Color: "D9E2F3", Style: 1}, {Type: "right", Color: "D9E2F3", Style: 1}, {Type: "top", Color: "D9E2F3", Style: 1}, {Type: "bottom", Color: "D9E2F3", Style: 1}},
+		Border:    lightBorder,
 	})
-	bodyStyle, _ := f.NewStyle(&excelize.Style{Alignment: &excelize.Alignment{Vertical: "top", WrapText: true}})
-	moneyStyle, _ := f.NewStyle(&excelize.Style{NumFmt: 4, Alignment: &excelize.Alignment{Vertical: "top"}})
-	totalStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}, Fill: excelize.Fill{Type: "pattern", Color: []string{"D9EAF7"}, Pattern: 1}})
-	totalMoneyStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}, Fill: excelize.Fill{Type: "pattern", Color: []string{"D9EAF7"}, Pattern: 1}, NumFmt: 4})
+	bodyLeftStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill, Border: lightBorder, Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"}})
+	bodyCenterStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill, Border: lightBorder, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"}})
+	descriptionStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill, Border: lightBorder, Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "top", WrapText: true}})
+	moneyStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill, Border: lightBorder, CustomNumFmt: &moneyFormat, Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center"}})
+	totalStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: totalFill, Border: lightBorder, Alignment: &excelize.Alignment{Vertical: "center"}})
+	totalMoneyStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Family: "Arial", Bold: true, Size: 10, Color: "1F2937"}, Fill: totalFill, Border: lightBorder, CustomNumFmt: &moneyFormat, Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center"}})
 
 	f.MergeCell(sheet, "A1", "G1")
 	f.SetCellValue(sheet, "A1", "Dev Work Tracker")
-	f.SetCellStyle(sheet, "A1", "A1", titleStyle)
+	f.SetCellStyle(sheet, "A1", "G1", titleStyle)
+	f.SetRowHeight(sheet, 1, 26)
 	if projectName == "" {
 		projectName = "Все проекты"
 	}
-	meta := [][2]string{{"Проект", projectName}, {"Период", month.Format("2006-01")}, {"Дата формирования", generatedAt.Format("02.01.2006 15:04")}}
+	meta := [][2]string{{"Проект", projectName}, {"Период", formatMonth(month)}, {"Дата формирования", generatedAt.Format("02.01.2006 15:04")}}
 	for i, item := range meta {
 		row := i + 2
+		f.MergeCell(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row))
+		f.MergeCell(sheet, fmt.Sprintf("C%d", row), fmt.Sprintf("G%d", row))
 		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), item[0])
-		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), item[1])
-		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), labelStyle)
+		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), item[1])
+		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("G%d", row), metadataBackgroundStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), labelStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("C%d", row), fmt.Sprintf("G%d", row), metadataValueStyle)
+		f.SetRowHeight(sheet, row, 20)
 	}
 
 	const headerRow = 6
@@ -70,8 +90,12 @@ func BuildExcel(month time.Time, projectName string, entries []domain.WorkEntry,
 		}
 		f.SetCellFormula(sheet, fmt.Sprintf("F%d", row), fmt.Sprintf("=%d/100", entry.HourlyRateKopecks))
 		f.SetCellFormula(sheet, fmt.Sprintf("G%d", row), fmt.Sprintf("=%d/100", entry.AmountKopecks))
-		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("E%d", row), bodyStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), bodyCenterStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("C%d", row), fmt.Sprintf("C%d", row), bodyLeftStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("D%d", row), fmt.Sprintf("D%d", row), descriptionStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("E%d", row), fmt.Sprintf("E%d", row), bodyCenterStyle)
 		f.SetCellStyle(sheet, fmt.Sprintf("F%d", row), fmt.Sprintf("G%d", row), moneyStyle)
+		f.SetRowHeight(sheet, row, descriptionRowHeight(entry.Description))
 		totalSeconds += entry.DurationSeconds
 		totalKopecks += entry.AmountKopecks
 	}
@@ -85,19 +109,59 @@ func BuildExcel(month time.Time, projectName string, entries []domain.WorkEntry,
 	f.SetCellFormula(sheet, fmt.Sprintf("G%d", totalRow+2), fmt.Sprintf("=%d/100", totalKopecks))
 	f.SetCellStyle(sheet, fmt.Sprintf("D%d", totalRow), fmt.Sprintf("G%d", totalRow+2), totalStyle)
 	f.SetCellStyle(sheet, fmt.Sprintf("G%d", totalRow+2), fmt.Sprintf("G%d", totalRow+2), totalMoneyStyle)
+	for row := totalRow; row <= totalRow+2; row++ {
+		f.SetRowHeight(sheet, row, 21)
+	}
 
-	widths := map[string]float64{"A": 7, "B": 14, "C": 24, "D": 55, "E": 16, "F": 17, "G": 17}
+	widths := map[string]float64{"A": 7, "B": 14, "C": 26, "D": 55, "E": 16, "F": 18, "G": 19}
 	for col, width := range widths {
 		f.SetColWidth(sheet, col, col, width)
 	}
 	f.SetPanes(sheet, &excelize.Panes{Freeze: true, Split: false, YSplit: headerRow, TopLeftCell: "A7", ActivePane: "bottomLeft"})
 	f.AutoFilter(sheet, fmt.Sprintf("A%d:G%d", headerRow, headerRow+len(entries)), nil)
+	view := "normal"
+	showGridLines := true
+	zoom := 100.0
+	f.SetSheetView(sheet, 0, &excelize.ViewOptions{View: &view, ShowGridLines: &showGridLines, ZoomScale: &zoom})
+	fitToPage := true
+	f.SetSheetProps(sheet, &excelize.SheetPropsOptions{FitToPage: &fitToPage})
+	pageSize, fitWidth, fitHeight := 9, 1, 0
+	orientation := "landscape"
+	f.SetPageLayout(sheet, &excelize.PageLayoutOptions{Size: &pageSize, Orientation: &orientation, FitToWidth: &fitWidth, FitToHeight: &fitHeight})
 
 	buffer, err := f.WriteToBuffer()
 	if err != nil {
 		return Excel{}, fmt.Errorf("write xlsx: %w", err)
 	}
 	return Excel{Data: bytes.Clone(buffer.Bytes()), Filename: filename(projectName, month)}, nil
+}
+
+var russianMonths = [...]string{"", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"}
+
+func formatMonth(month time.Time) string {
+	return fmt.Sprintf("%s %d", russianMonths[month.Month()], month.Year())
+}
+
+func descriptionRowHeight(value string) float64 {
+	const (
+		charactersPerLine = 55
+		baseHeight        = 21.0
+		lineHeight        = 15.0
+		maxHeight         = 300.0
+	)
+	lines := 0
+	for _, part := range strings.Split(value, "\n") {
+		partLines := (utf8.RuneCountInString(part) + charactersPerLine - 1) / charactersPerLine
+		if partLines < 1 {
+			partLines = 1
+		}
+		lines += partLines
+	}
+	height := baseHeight + float64(lines-1)*lineHeight
+	if height > maxHeight {
+		return maxHeight
+	}
+	return height
 }
 
 var unsafeFilename = regexp.MustCompile(`[^\pL\pN_-]+`)

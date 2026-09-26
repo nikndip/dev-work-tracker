@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"testing"
+	"time"
 
 	"github.com/go-telegram/bot/models"
 )
@@ -13,6 +14,31 @@ func TestAuthorizerAllowed(t *testing.T) {
 	}
 	if authorizer.Allowed(1) {
 		t.Fatal("unconfigured user must be denied")
+	}
+}
+
+func TestYesterdayCallbackUpdatesDraftWithoutSaving(t *testing.T) {
+	markup := dateKeyboard()
+	if got := markup.InlineKeyboard[0][1].CallbackData; got != "new:datevalue:yesterday" {
+		t.Fatalf("yesterday callback_data = %q", got)
+	}
+
+	location := time.FixedZone("Europe/Moscow", 3*60*60)
+	yesterday := time.Date(2026, 9, 25, 0, 0, 0, 0, location)
+	draft := session{Step: stepAddDescription, ProjectID: 7, Description: "Работа"}
+	updated := selectDraftDate(draft, yesterday)
+	if !updated.WorkDate.Equal(yesterday) {
+		t.Fatalf("draft date = %v, want %v", updated.WorkDate, yesterday)
+	}
+	if updated.Step != stepAddDuration {
+		t.Fatalf("draft step = %q, want %q", updated.Step, stepAddDuration)
+	}
+	if updated.EntryID != 0 {
+		t.Fatal("date callback must not create a WorkEntry")
+	}
+	repeated := selectDraftDate(updated, yesterday)
+	if repeated.EntryID != 0 || !repeated.WorkDate.Equal(yesterday) || repeated.Step != stepAddDuration {
+		t.Fatalf("repeated callback changed draft unexpectedly: %+v", repeated)
 	}
 }
 

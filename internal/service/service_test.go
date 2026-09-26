@@ -151,3 +151,32 @@ func TestMonthlyReportBoundariesAndExactSum(t *testing.T) {
 		t.Fatalf("unexpected bounds %v..%v", repo.reportStart, repo.reportEnd)
 	}
 }
+
+func TestTodayAndYesterdayUseMoscowCalendarDate(t *testing.T) {
+	location, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name          string
+		now           time.Time
+		wantToday     string
+		wantYesterday string
+	}{
+		{"regular date after midnight", time.Date(2026, 9, 26, 0, 10, 0, 0, location), "26.09.2026", "25.09.2026"},
+		{"month boundary", time.Date(2026, 10, 1, 0, 10, 0, 0, location), "01.10.2026", "30.09.2026"},
+		{"year boundary", time.Date(2027, 1, 1, 0, 10, 0, 0, location), "01.01.2027", "31.12.2026"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			s := New(&fakeRepo{}, 200000, location)
+			s.now = func() time.Time { return test.now }
+			if got := s.Today().Format("02.01.2006"); got != test.wantToday {
+				t.Fatalf("Today() = %s, want %s", got, test.wantToday)
+			}
+			if got := s.Yesterday().Format("02.01.2006"); got != test.wantYesterday {
+				t.Fatalf("Yesterday() = %s, want %s", got, test.wantYesterday)
+			}
+		})
+	}
+}

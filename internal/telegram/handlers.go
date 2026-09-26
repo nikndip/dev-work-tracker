@@ -22,6 +22,11 @@ import (
 
 const pageSize = 6
 
+const (
+	dateActionToday     = "today"
+	dateActionYesterday = "yesterday"
+)
+
 func (b *Bot) handleUpdate(ctx context.Context, client *bot.Bot, update *models.Update) {
 	userID, _ := updateUserID(update)
 	if update.CallbackQuery != nil {
@@ -104,7 +109,7 @@ func (b *Bot) handleMessage(ctx context.Context, client *bot.Bot, userID, chatID
 			b.sendError(ctx, client, chatID, err)
 			return
 		}
-		s.WorkDate = date
+		s = selectDraftDate(s, date)
 		b.sessions.set(userID, s)
 		b.askDuration(ctx, client, chatID)
 	case stepAddDuration:
@@ -345,11 +350,12 @@ func (b *Bot) handleNewCallback(ctx context.Context, client *bot.Bot, userID, ch
 	}
 	if len(parts) == 3 && parts[1] == "datevalue" {
 		s := b.sessions.get(userID)
-		if parts[2] == "today" {
-			s.WorkDate = b.service.Today()
-		} else {
-			s.WorkDate = b.service.Today().AddDate(0, 0, -1)
+		selectedDate, err := b.dateForAction(parts[2])
+		if err != nil {
+			b.sendError(ctx, client, chatID, err)
+			return
 		}
+		s = selectDraftDate(s, selectedDate)
 		b.sessions.set(userID, s)
 		b.askDuration(ctx, client, chatID)
 		return
@@ -375,9 +381,30 @@ func (b *Bot) handleNewCallback(ctx context.Context, client *bot.Bot, userID, ch
 }
 
 func (b *Bot) askDate(ctx context.Context, client *bot.Bot, chatID int64) {
-	b.send(ctx, client, chatID, "Когда была выполнена работа?", keyboard(
-		[]models.InlineKeyboardButton{button("Сегодня", "new:datevalue:today"), button("Вчера", "new:datevalue:yesterday")},
-		[]models.InlineKeyboardButton{button("📅 Ввести дату", "new:date")}, []models.InlineKeyboardButton{button("❌ Отмена", "cancel")}))
+	b.send(ctx, client, chatID, "Когда была выполнена работа?", dateKeyboard())
+}
+
+func dateKeyboard() *models.InlineKeyboardMarkup {
+	return keyboard(
+		[]models.InlineKeyboardButton{button("Сегодня", "new:datevalue:"+dateActionToday), button("Вчера", "new:datevalue:"+dateActionYesterday)},
+		[]models.InlineKeyboardButton{button("📅 Ввести дату", "new:date")}, []models.InlineKeyboardButton{button("❌ Отмена", "cancel")})
+}
+
+func (b *Bot) dateForAction(action string) (time.Time, error) {
+	switch action {
+	case dateActionToday:
+		return b.service.Today(), nil
+	case dateActionYesterday:
+		return b.service.Yesterday(), nil
+	default:
+		return time.Time{}, errors.New("неизвестный вариант даты")
+	}
+}
+
+func selectDraftDate(s session, selectedDate time.Time) session {
+	s.WorkDate = selectedDate
+	s.Step = stepAddDuration
+	return s
 }
 func (b *Bot) askDuration(ctx context.Context, client *bot.Bot, chatID int64) {
 	b.send(ctx, client, chatID, "Сколько времени заняла работа?", keyboard(

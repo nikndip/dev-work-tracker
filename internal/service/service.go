@@ -197,6 +197,10 @@ func (s *Service) Today() time.Time {
 	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, s.location)
 }
 
+func (s *Service) Yesterday() time.Time {
+	return s.Today().AddDate(0, 0, -1)
+}
+
 func (s *Service) ValidateWorkDate(date time.Time) (time.Time, error) {
 	local := date.In(s.location)
 	date = time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, s.location)
