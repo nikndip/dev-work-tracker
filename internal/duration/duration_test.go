@@ -29,3 +29,25 @@ func TestFormat(t *testing.T) {
 		}
 	}
 }
+
+func TestReportDurationAndTotalMinutes(t *testing.T) {
+	tests := []struct {
+		seconds int64
+		minutes int64
+		text    string
+	}{
+		{seconds: 0, minutes: 0, text: "0 мин"},
+		{seconds: 3600, minutes: 60, text: "1 ч (60 мин)"},
+		{seconds: 3900, minutes: 65, text: "1 ч 5 мин (65 мин)"},
+		{seconds: 4980, minutes: 83, text: "1 ч 23 мин (83 мин)"},
+		{seconds: 41700, minutes: 695, text: "11 ч 35 мин (695 мин)"},
+	}
+	for _, test := range tests {
+		if got := TotalMinutes(test.seconds); got != test.minutes {
+			t.Errorf("TotalMinutes(%d) = %d; want %d", test.seconds, got, test.minutes)
+		}
+		if got := FormatReport(test.seconds); got != test.text {
+			t.Errorf("FormatReport(%d) = %q; want %q", test.seconds, got, test.text)
+		}
+	}
+}

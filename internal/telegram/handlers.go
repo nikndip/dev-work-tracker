@@ -549,10 +549,8 @@ func (b *Bot) showReport(ctx context.Context, client *bot.Bot, userID, chatID in
 		return
 	}
 	b.sessions.set(userID, session{Month: report.Month})
-	key := report.Month.Format("2006-01")
-	b.send(ctx, client, chatID, reportText(report), keyboard(
-		[]models.InlineKeyboardButton{button("⬅️ Предыдущий месяц", "report:prev:"+key), button("📅 Выбрать месяц", "report:choose")},
-		[]models.InlineKeyboardButton{button("📋 Показать работы", "report:entries:"+key)}, []models.InlineKeyboardButton{button("🏠 Меню", "menu")}))
+	currentMonth, _ := service.MonthBounds(b.service.Today(), b.service.Location())
+	b.send(ctx, client, chatID, reportText(report), reportKeyboard(report.Month, currentMonth))
 }
 
 func (b *Bot) handleReportCallback(ctx context.Context, client *bot.Bot, userID, chatID int64, parts []string) {
@@ -570,6 +568,17 @@ func (b *Bot) handleReportCallback(ctx context.Context, client *bot.Bot, userID,
 			month, err := service.ParseMonth(parts[2], b.service.Location())
 			if err == nil {
 				b.showReport(ctx, client, userID, chatID, month.AddDate(0, -1, 0))
+			}
+		}
+	case "next":
+		if len(parts) == 3 {
+			month, err := service.ParseMonth(parts[2], b.service.Location())
+			if err != nil {
+				return
+			}
+			currentMonth, _ := service.MonthBounds(b.service.Today(), b.service.Location())
+			if next, ok := nextReportMonth(month, currentMonth); ok {
+				b.showReport(ctx, client, userID, chatID, next)
 			}
 		}
 	case "entries":

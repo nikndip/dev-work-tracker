@@ -33,6 +33,7 @@ func BuildExcel(month time.Time, projectName string, entries []domain.WorkEntry,
 	totalFill := excelize.Fill{Type: "pattern", Color: []string{"DDEBF7"}, Pattern: 1}
 	darkFont := &excelize.Font{Family: "Arial", Size: 10, Color: "1F2937"}
 	moneyFormat := "#,##0.00"
+	integerFormat := "0"
 
 	worksheetStyle, err := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill})
 	if err != nil {
@@ -56,14 +57,16 @@ func BuildExcel(month time.Time, projectName string, entries []domain.WorkEntry,
 	})
 	bodyLeftStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill, Border: lightBorder, Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"}})
 	bodyCenterStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill, Border: lightBorder, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"}})
+	integerStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill, Border: lightBorder, CustomNumFmt: &integerFormat, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"}})
 	descriptionStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill, Border: lightBorder, Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "top", WrapText: true}})
 	moneyStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill, Border: lightBorder, CustomNumFmt: &moneyFormat, Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center"}})
 	totalStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: totalFill, Border: lightBorder, Alignment: &excelize.Alignment{Vertical: "center"}})
+	totalIntegerStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: totalFill, Border: lightBorder, CustomNumFmt: &integerFormat, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"}})
 	totalMoneyStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Family: "Arial", Bold: true, Size: 10, Color: "1F2937"}, Fill: totalFill, Border: lightBorder, CustomNumFmt: &moneyFormat, Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center"}})
 
-	f.MergeCell(sheet, "A1", "G1")
+	f.MergeCell(sheet, "A1", "H1")
 	f.SetCellValue(sheet, "A1", "Dev Work Tracker")
-	f.SetCellStyle(sheet, "A1", "G1", titleStyle)
+	f.SetCellStyle(sheet, "A1", "H1", titleStyle)
 	f.SetRowHeight(sheet, 1, 26)
 	if projectName == "" {
 		projectName = "Все проекты"
@@ -72,22 +75,22 @@ func BuildExcel(month time.Time, projectName string, entries []domain.WorkEntry,
 	for i, item := range meta {
 		row := i + 2
 		f.MergeCell(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row))
-		f.MergeCell(sheet, fmt.Sprintf("C%d", row), fmt.Sprintf("G%d", row))
+		f.MergeCell(sheet, fmt.Sprintf("C%d", row), fmt.Sprintf("H%d", row))
 		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), item[0])
 		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), item[1])
-		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("G%d", row), metadataBackgroundStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("H%d", row), metadataBackgroundStyle)
 		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), labelStyle)
-		f.SetCellStyle(sheet, fmt.Sprintf("C%d", row), fmt.Sprintf("G%d", row), metadataValueStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("C%d", row), fmt.Sprintf("H%d", row), metadataValueStyle)
 		f.SetRowHeight(sheet, row, 20)
 	}
 
 	const headerRow = 6
-	headers := []string{"№", "Дата", "Проект", "Выполненная работа", "Время", "Ставка, ₽/ч", "Стоимость, ₽"}
+	headers := []string{"№", "Дата", "Проект", "Выполненная работа", "Время", "Время, мин", "Ставка, ₽/ч", "Стоимость, ₽"}
 	for i, header := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, headerRow)
 		f.SetCellValue(sheet, cell, header)
 	}
-	f.SetCellStyle(sheet, "A6", "G6", headerStyle)
+	f.SetCellStyle(sheet, "A6", "H6", headerStyle)
 	f.SetRowHeight(sheet, headerRow, 28)
 
 	var totalSeconds, totalKopecks int64
@@ -98,13 +101,15 @@ func BuildExcel(month time.Time, projectName string, entries []domain.WorkEntry,
 			cell, _ := excelize.CoordinatesToCellName(col+1, row)
 			f.SetCellValue(sheet, cell, value)
 		}
-		f.SetCellValue(sheet, fmt.Sprintf("F%d", row), rublesValue(entry.HourlyRateKopecks))
-		f.SetCellValue(sheet, fmt.Sprintf("G%d", row), rublesValue(entry.AmountKopecks))
+		f.SetCellValue(sheet, fmt.Sprintf("F%d", row), duration.TotalMinutes(entry.DurationSeconds))
+		f.SetCellValue(sheet, fmt.Sprintf("G%d", row), rublesValue(entry.HourlyRateKopecks))
+		f.SetCellValue(sheet, fmt.Sprintf("H%d", row), rublesValue(entry.AmountKopecks))
 		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), bodyCenterStyle)
 		f.SetCellStyle(sheet, fmt.Sprintf("C%d", row), fmt.Sprintf("C%d", row), bodyLeftStyle)
 		f.SetCellStyle(sheet, fmt.Sprintf("D%d", row), fmt.Sprintf("D%d", row), descriptionStyle)
 		f.SetCellStyle(sheet, fmt.Sprintf("E%d", row), fmt.Sprintf("E%d", row), bodyCenterStyle)
-		f.SetCellStyle(sheet, fmt.Sprintf("F%d", row), fmt.Sprintf("G%d", row), moneyStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("F%d", row), fmt.Sprintf("F%d", row), integerStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("G%d", row), fmt.Sprintf("H%d", row), moneyStyle)
 		f.SetRowHeight(sheet, row, descriptionRowHeight(entry.Description))
 		totalSeconds += entry.DurationSeconds
 		totalKopecks += entry.AmountKopecks
@@ -115,20 +120,24 @@ func BuildExcel(month time.Time, projectName string, entries []domain.WorkEntry,
 	f.SetCellValue(sheet, fmt.Sprintf("E%d", totalRow), len(entries))
 	f.SetCellValue(sheet, fmt.Sprintf("D%d", totalRow+1), "Общее время")
 	f.SetCellValue(sheet, fmt.Sprintf("E%d", totalRow+1), duration.Format(totalSeconds))
-	f.SetCellValue(sheet, fmt.Sprintf("D%d", totalRow+2), "Итого, ₽")
-	f.SetCellValue(sheet, fmt.Sprintf("G%d", totalRow+2), rublesValue(totalKopecks))
-	f.SetCellStyle(sheet, fmt.Sprintf("D%d", totalRow), fmt.Sprintf("G%d", totalRow+2), totalStyle)
-	f.SetCellStyle(sheet, fmt.Sprintf("G%d", totalRow+2), fmt.Sprintf("G%d", totalRow+2), totalMoneyStyle)
-	for row := totalRow; row <= totalRow+2; row++ {
+	f.SetCellValue(sheet, fmt.Sprintf("D%d", totalRow+2), "Всего минут")
+	f.SetCellValue(sheet, fmt.Sprintf("E%d", totalRow+2), duration.TotalMinutes(totalSeconds))
+	f.SetCellValue(sheet, fmt.Sprintf("D%d", totalRow+3), "Итого, ₽")
+	f.SetCellValue(sheet, fmt.Sprintf("H%d", totalRow+3), rublesValue(totalKopecks))
+	f.SetCellStyle(sheet, fmt.Sprintf("D%d", totalRow), fmt.Sprintf("H%d", totalRow+3), totalStyle)
+	f.SetCellStyle(sheet, fmt.Sprintf("E%d", totalRow), fmt.Sprintf("E%d", totalRow), totalIntegerStyle)
+	f.SetCellStyle(sheet, fmt.Sprintf("E%d", totalRow+2), fmt.Sprintf("E%d", totalRow+2), totalIntegerStyle)
+	f.SetCellStyle(sheet, fmt.Sprintf("H%d", totalRow+3), fmt.Sprintf("H%d", totalRow+3), totalMoneyStyle)
+	for row := totalRow; row <= totalRow+3; row++ {
 		f.SetRowHeight(sheet, row, 21)
 	}
 
-	widths := map[string]float64{"A": 7, "B": 14, "C": 26, "D": 55, "E": 16, "F": 18, "G": 19}
+	widths := map[string]float64{"A": 7, "B": 14, "C": 26, "D": 55, "E": 16, "F": 14, "G": 18, "H": 19}
 	for col, width := range widths {
 		f.SetColWidth(sheet, col, col, width)
 	}
 	f.SetPanes(sheet, &excelize.Panes{Freeze: true, Split: false, YSplit: headerRow, TopLeftCell: "A7", ActivePane: "bottomLeft"})
-	f.AutoFilter(sheet, fmt.Sprintf("A%d:G%d", headerRow, headerRow+len(entries)), nil)
+	f.AutoFilter(sheet, fmt.Sprintf("A%d:H%d", headerRow, headerRow+len(entries)), nil)
 	view := "normal"
 	showGridLines := true
 	zoom := 100.0

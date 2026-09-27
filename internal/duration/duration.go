@@ -88,3 +88,15 @@ func Format(seconds int64) string {
 		return fmt.Sprintf("%d мин", minutes)
 	}
 }
+
+func TotalMinutes(seconds int64) int64 {
+	return seconds / 60
+}
+
+func FormatReport(seconds int64) string {
+	minutes := TotalMinutes(seconds)
+	if minutes == 0 {
+		return "0 мин"
+	}
+	return fmt.Sprintf("%s (%d мин)", Format(seconds), minutes)
+}

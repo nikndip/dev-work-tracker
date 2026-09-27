@@ -43,6 +43,9 @@ func TestBuildExcelLightBusinessLayout(t *testing.T) {
 	if got, _ := f.GetCellValue("Отчёт", "D7"); got != longDescription {
 		t.Fatal("long description was changed or lost")
 	}
+	if got, _ := f.GetCellValue("Отчёт", "F6"); got != "Время, мин" {
+		t.Fatalf("minutes header = %q, want Время, мин", got)
+	}
 
 	header := cellStyle(t, f, "B6")
 	assertFill(t, header, "4472C4")
@@ -66,7 +69,7 @@ func TestBuildExcelLightBusinessLayout(t *testing.T) {
 	assertLightColumnStyle(t, f, "A")
 	assertLightColumnStyle(t, f, "H")
 	assertLightColumnStyle(t, f, "XFD")
-	for column, want := range map[string]float64{"A": 7, "B": 14, "C": 26, "D": 55, "E": 16, "F": 18, "G": 19} {
+	for column, want := range map[string]float64{"A": 7, "B": 14, "C": 26, "D": 55, "E": 16, "F": 14, "G": 18, "H": 19} {
 		got, err := f.GetColWidth("Отчёт", column)
 		if err != nil || got != want {
 			t.Errorf("column %s width = %v, %v; want %v", column, got, err, want)
@@ -81,10 +84,12 @@ func TestBuildExcelLightBusinessLayout(t *testing.T) {
 		t.Fatalf("long description row was not expanded: %.1f", height)
 	}
 
-	assertNumericMoney(t, f, "F7", "2000")
-	assertNumericMoney(t, f, "G7", "2666.67")
-	assertNumericMoney(t, f, "G12", "7666.67")
-	money := cellStyle(t, f, "G7")
+	assertNumericInteger(t, f, "F7", "80")
+	assertNumericMoney(t, f, "G7", "2000")
+	assertNumericMoney(t, f, "H7", "2666.67")
+	assertNumericInteger(t, f, "E12", "230")
+	assertNumericMoney(t, f, "H13", "7666.67")
+	money := cellStyle(t, f, "H7")
 	if money.CustomNumFmt == nil || *money.CustomNumFmt != "#,##0.00" {
 		t.Fatalf("unexpected money number format: %+v", money.CustomNumFmt)
 	}
@@ -123,15 +128,20 @@ func TestBuildExcelThirteenEntryFinancialRegression(t *testing.T) {
 
 	for i, amount := range amounts {
 		row := 7 + i
-		assertNumericMoney(t, f, cell("F", row), "2000")
-		assertNumericMoney(t, f, cell("G", row), rawRubles(amount))
+		assertNumericInteger(t, f, cell("F", row), strconv.FormatInt(minutes[i], 10))
+		assertNumericMoney(t, f, cell("G", row), "2000")
+		assertNumericMoney(t, f, cell("H", row), rawRubles(amount))
 	}
-	assertNumericMoney(t, f, "G23", "23166.68")
+	assertNumericMoney(t, f, "H24", "23166.68")
 	if got, _ := f.GetCellValue("Отчёт", "E21"); got != "13" {
 		t.Fatalf("entry count = %q, want 13", got)
 	}
 	if got, _ := f.GetCellValue("Отчёт", "E22"); got != "11 ч 35 мин" {
 		t.Fatalf("total duration = %q, want 11 ч 35 мин", got)
+	}
+	assertNumericInteger(t, f, "E23", "695")
+	if got, _ := f.GetCellValue("Отчёт", "D23"); got != "Всего минут" {
+		t.Fatalf("total minutes label = %q, want Всего минут", got)
 	}
 
 	xml := worksheetXML(t, result.Data)
@@ -140,6 +150,20 @@ func TestBuildExcelThirteenEntryFinancialRegression(t *testing.T) {
 	}
 	if cells := strings.Count(xml, "<c "); cells > 500 {
 		t.Fatalf("worksheet materialized too many cells: %d", cells)
+	}
+}
+
+func assertNumericInteger(t *testing.T, f *excelize.File, address, want string) {
+	t.Helper()
+	if cellType, err := f.GetCellType("Отчёт", address); err != nil || (cellType != excelize.CellTypeNumber && cellType != excelize.CellTypeUnset) {
+		t.Fatalf("%s type = %v, %v; want numeric", address, cellType, err)
+	}
+	if formula, _ := f.GetCellFormula("Отчёт", address); formula != "" {
+		t.Fatalf("%s must contain a backend value, got formula %q", address, formula)
+	}
+	got, err := f.GetCellValue("Отчёт", address, excelize.Options{RawCellValue: true})
+	if err != nil || got != want {
+		t.Fatalf("%s raw value = %q, %v; want %q", address, got, err, want)
 	}
 }
 

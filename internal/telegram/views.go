@@ -53,13 +53,32 @@ func reportText(r domain.MonthlyReport) string {
 	var out strings.Builder
 	fmt.Fprintf(&out, "📊 %s\n", monthTitle(r.Month))
 	if len(r.Projects) == 0 {
-		out.WriteString("\nЗа этот месяц работ пока нет.")
+		out.WriteString("\nЗа этот месяц работ пока нет.\n\n────────────────\nИтого:\nРабот: 0\nФактическое время: 0 мин\nСумма: 0 ₽")
 		return out.String()
 	}
 	for _, p := range r.Projects {
-		fmt.Fprintf(&out, "\n%s\nРабот: %d\nФактическое время: %s\nСумма: %s\n", p.ProjectName, p.EntryCount, duration.Format(p.DurationSeconds), money.FormatKopecks(p.AmountKopecks))
+		fmt.Fprintf(&out, "\n%s\nРабот: %d\nФактическое время: %s\nСумма: %s\n", p.ProjectName, p.EntryCount, duration.FormatReport(p.DurationSeconds), money.FormatKopecks(p.AmountKopecks))
 	}
 	out.WriteString("\n────────────────\nИтого:\n")
-	fmt.Fprintf(&out, "%s\n%s", duration.Format(r.DurationSeconds), money.FormatKopecks(r.AmountKopecks))
+	fmt.Fprintf(&out, "%s\n%s", duration.FormatReport(r.DurationSeconds), money.FormatKopecks(r.AmountKopecks))
 	return out.String()
+}
+
+func reportKeyboard(month, currentMonth time.Time) *models.InlineKeyboardMarkup {
+	key := month.Format("2006-01")
+	navigation := []models.InlineKeyboardButton{button("⬅️ Предыдущий месяц", "report:prev:"+key)}
+	if month.Before(currentMonth) {
+		navigation = append(navigation, button("Следующий месяц ➡️", "report:next:"+key))
+	}
+	return keyboard(
+		navigation,
+		[]models.InlineKeyboardButton{button("📅 Выбрать месяц", "report:choose")},
+		[]models.InlineKeyboardButton{button("📋 Показать работы", "report:entries:"+key)},
+		[]models.InlineKeyboardButton{button("🏠 Меню", "menu")},
+	)
+}
+
+func nextReportMonth(month, currentMonth time.Time) (time.Time, bool) {
+	next := month.AddDate(0, 1, 0)
+	return next, !next.After(currentMonth)
 }
