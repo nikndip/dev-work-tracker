@@ -68,7 +68,7 @@ func reportKeyboard(month, currentMonth time.Time) *models.InlineKeyboardMarkup 
 	key := month.Format("2006-01")
 	navigation := []models.InlineKeyboardButton{button("⬅️ Предыдущий месяц", "report:prev:"+key)}
 	if month.Before(currentMonth) {
-		navigation = append(navigation, button("Следующий месяц ➡️", "report:next:"+key))
+		navigation = append(navigation, button("➡️ Следующий месяц", "report:next:"+key))
 	}
 	return keyboard(
 		navigation,
@@ -76,6 +76,10 @@ func reportKeyboard(month, currentMonth time.Time) *models.InlineKeyboardMarkup 
 		[]models.InlineKeyboardButton{button("📋 Показать работы", "report:entries:"+key)},
 		[]models.InlineKeyboardButton{button("🏠 Меню", "menu")},
 	)
+}
+
+func previousReportMonth(month time.Time) time.Time {
+	return month.AddDate(0, -1, 0)
 }
 
 func nextReportMonth(month, currentMonth time.Time) (time.Time, bool) {

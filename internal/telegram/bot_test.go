@@ -100,13 +100,16 @@ func TestReportNavigation(t *testing.T) {
 	if _, ok := nextReportMonth(current, current); ok {
 		t.Fatal("navigation from the current month into the future must be rejected")
 	}
+	if previous := previousReportMonth(september); previous.Format("2006-01") != "2026-08" {
+		t.Fatalf("September previous month = %s; want 2026-08", previous.Format("2006-01"))
+	}
 
 	december := time.Date(2026, 12, 1, 0, 0, 0, 0, location)
 	january := time.Date(2027, 1, 1, 0, 0, 0, 0, location)
 	if next, ok := nextReportMonth(december, january); !ok || next.Format("2006-01") != "2027-01" {
 		t.Fatalf("December next month = %s, %v; want 2027-01, true", next.Format("2006-01"), ok)
 	}
-	if previous := january.AddDate(0, -1, 0); previous.Format("2006-01") != "2026-12" {
+	if previous := previousReportMonth(january); previous.Format("2006-01") != "2026-12" {
 		t.Fatalf("January previous month = %s; want 2026-12", previous.Format("2006-01"))
 	}
 }

@@ -567,7 +567,7 @@ func (b *Bot) handleReportCallback(ctx context.Context, client *bot.Bot, userID,
 		if len(parts) == 3 {
 			month, err := service.ParseMonth(parts[2], b.service.Location())
 			if err == nil {
-				b.showReport(ctx, client, userID, chatID, month.AddDate(0, -1, 0))
+				b.showReport(ctx, client, userID, chatID, previousReportMonth(month))
 			}
 		}
 	case "next":
