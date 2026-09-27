@@ -10,7 +10,7 @@ func TestLoadValidConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load() error = %v", err)
 	}
-	if cfg.TelegramAllowedUserID != 624740467 || cfg.DefaultHourlyRateKopecks != 200000 {
+	if cfg.TelegramAllowedUserID != 123456789 || cfg.DefaultHourlyRateKopecks != 200000 {
 		t.Fatalf("unexpected numeric config: %+v", cfg)
 	}
 	if cfg.DefaultTimezone.String() != "Europe/Moscow" || cfg.HTTPAddress != ":8080" {
@@ -47,7 +47,7 @@ func TestParsePositiveKopecks(t *testing.T) {
 
 func validEnvironment() map[string]string {
 	return map[string]string{
-		"TELEGRAM_BOT_TOKEN": "123456:test-token", "TELEGRAM_ALLOWED_USER_ID": "624740467",
+		"TELEGRAM_BOT_TOKEN": "123456:test-token", "TELEGRAM_ALLOWED_USER_ID": "123456789",
 		"DATABASE_URL": "postgres://tracker:password@localhost/tracker", "DEFAULT_TIMEZONE": "Europe/Moscow",
 		"DEFAULT_HOURLY_RATE_KOPECKS": "200000",
 	}

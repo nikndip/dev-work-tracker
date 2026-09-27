@@ -12,8 +12,8 @@ import (
 )
 
 func TestAuthorizerAllowed(t *testing.T) {
-	authorizer := Authorizer{AllowedUserID: 624740467}
-	if !authorizer.Allowed(624740467) {
+	authorizer := Authorizer{AllowedUserID: 123456789}
+	if !authorizer.Allowed(123456789) {
 		t.Fatal("configured user must be allowed")
 	}
 	if authorizer.Allowed(1) {
@@ -134,14 +134,14 @@ func TestUpdateUserID(t *testing.T) {
 	}{
 		{
 			name:   "message",
-			update: &models.Update{Message: &models.Message{From: &models.User{ID: 624740467}}},
-			wantID: 624740467,
+			update: &models.Update{Message: &models.Message{From: &models.User{ID: 123456789}}},
+			wantID: 123456789,
 			wantOK: true,
 		},
 		{
 			name:   "callback query",
-			update: &models.Update{CallbackQuery: &models.CallbackQuery{From: models.User{ID: 624740467}}},
-			wantID: 624740467,
+			update: &models.Update{CallbackQuery: &models.CallbackQuery{From: models.User{ID: 123456789}}},
+			wantID: 123456789,
 			wantOK: true,
 		},
 		{name: "unsupported update", update: &models.Update{}},
