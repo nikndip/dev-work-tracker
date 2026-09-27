@@ -34,6 +34,16 @@ func BuildExcel(month time.Time, projectName string, entries []domain.WorkEntry,
 	darkFont := &excelize.Font{Family: "Arial", Size: 10, Color: "1F2937"}
 	moneyFormat := "#,##0.00"
 
+	worksheetStyle, err := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill})
+	if err != nil {
+		return Excel{}, fmt.Errorf("create worksheet style: %w", err)
+	}
+	// Set the light default before creating rows. Excelize then writes one
+	// compact column-style range instead of materializing millions of cells.
+	if err := f.SetColStyle(sheet, "A:XFD", worksheetStyle); err != nil {
+		return Excel{}, fmt.Errorf("set worksheet style: %w", err)
+	}
+
 	titleStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Family: "Arial", Bold: true, Size: 16, Color: "1F4E78"}, Fill: whiteFill, Alignment: &excelize.Alignment{Vertical: "center"}})
 	metadataBackgroundStyle, _ := f.NewStyle(&excelize.Style{Font: darkFont, Fill: whiteFill, Alignment: &excelize.Alignment{Vertical: "center"}})
 	labelStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Family: "Arial", Bold: true, Size: 10, Color: "1F4E78"}, Fill: whiteFill, Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"}})
@@ -88,8 +98,8 @@ func BuildExcel(month time.Time, projectName string, entries []domain.WorkEntry,
 			cell, _ := excelize.CoordinatesToCellName(col+1, row)
 			f.SetCellValue(sheet, cell, value)
 		}
-		f.SetCellFormula(sheet, fmt.Sprintf("F%d", row), fmt.Sprintf("=%d/100", entry.HourlyRateKopecks))
-		f.SetCellFormula(sheet, fmt.Sprintf("G%d", row), fmt.Sprintf("=%d/100", entry.AmountKopecks))
+		f.SetCellValue(sheet, fmt.Sprintf("F%d", row), rublesValue(entry.HourlyRateKopecks))
+		f.SetCellValue(sheet, fmt.Sprintf("G%d", row), rublesValue(entry.AmountKopecks))
 		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("B%d", row), bodyCenterStyle)
 		f.SetCellStyle(sheet, fmt.Sprintf("C%d", row), fmt.Sprintf("C%d", row), bodyLeftStyle)
 		f.SetCellStyle(sheet, fmt.Sprintf("D%d", row), fmt.Sprintf("D%d", row), descriptionStyle)
@@ -106,7 +116,7 @@ func BuildExcel(month time.Time, projectName string, entries []domain.WorkEntry,
 	f.SetCellValue(sheet, fmt.Sprintf("D%d", totalRow+1), "Общее время")
 	f.SetCellValue(sheet, fmt.Sprintf("E%d", totalRow+1), duration.Format(totalSeconds))
 	f.SetCellValue(sheet, fmt.Sprintf("D%d", totalRow+2), "Итого, ₽")
-	f.SetCellFormula(sheet, fmt.Sprintf("G%d", totalRow+2), fmt.Sprintf("=%d/100", totalKopecks))
+	f.SetCellValue(sheet, fmt.Sprintf("G%d", totalRow+2), rublesValue(totalKopecks))
 	f.SetCellStyle(sheet, fmt.Sprintf("D%d", totalRow), fmt.Sprintf("G%d", totalRow+2), totalStyle)
 	f.SetCellStyle(sheet, fmt.Sprintf("G%d", totalRow+2), fmt.Sprintf("G%d", totalRow+2), totalMoneyStyle)
 	for row := totalRow; row <= totalRow+2; row++ {
@@ -134,6 +144,10 @@ func BuildExcel(month time.Time, projectName string, entries []domain.WorkEntry,
 		return Excel{}, fmt.Errorf("write xlsx: %w", err)
 	}
 	return Excel{Data: bytes.Clone(buffer.Bytes()), Filename: filename(projectName, month)}, nil
+}
+
+func rublesValue(kopecks int64) float64 {
+	return float64(kopecks) / 100
 }
 
 var russianMonths = [...]string{"", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"}

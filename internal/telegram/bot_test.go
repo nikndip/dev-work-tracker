@@ -1,8 +1,11 @@
 package telegram
 
 import (
+	"strings"
 	"testing"
 	"time"
+
+	"dev-work-tracker/internal/domain"
 
 	"github.com/go-telegram/bot/models"
 )
@@ -39,6 +42,25 @@ func TestYesterdayCallbackUpdatesDraftWithoutSaving(t *testing.T) {
 	repeated := selectDraftDate(updated, yesterday)
 	if repeated.EntryID != 0 || !repeated.WorkDate.Equal(yesterday) || repeated.Step != stepAddDuration {
 		t.Fatalf("repeated callback changed draft unexpectedly: %+v", repeated)
+	}
+}
+
+func TestReportTextIncludesProjectAndMonthlyAmounts(t *testing.T) {
+	report := domain.MonthlyReport{
+		Month: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+		Projects: []domain.ProjectReport{{
+			ProjectName: "ProjectHub", EntryCount: 13, DurationSeconds: 41700, AmountKopecks: 2316668,
+		}},
+		EntryCount: 13, DurationSeconds: 41700, AmountKopecks: 2316668,
+	}
+	text := reportText(report)
+	for _, want := range []string{
+		"ProjectHub", "Работ: 13", "Фактическое время: 11 ч 35 мин", "Сумма: 23 166,68 ₽",
+		"Итого:\n11 ч 35 мин\n23 166,68 ₽",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("report does not contain %q:\n%s", want, text)
+		}
 	}
 }
 

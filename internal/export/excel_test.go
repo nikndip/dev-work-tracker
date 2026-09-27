@@ -1,7 +1,11 @@
 package export
 
 import (
+	"archive/zip"
 	"bytes"
+	"fmt"
+	"io"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -59,9 +63,9 @@ func TestBuildExcelLightBusinessLayout(t *testing.T) {
 		t.Fatalf("totals must use dark text: %+v", total.Font)
 	}
 
-	if styleID, err := f.GetCellStyle("Отчёт", "H100"); err != nil || styleID != 0 {
-		t.Fatalf("unused worksheet area must remain unstyled, style=%d err=%v", styleID, err)
-	}
+	assertLightColumnStyle(t, f, "A")
+	assertLightColumnStyle(t, f, "H")
+	assertLightColumnStyle(t, f, "XFD")
 	for column, want := range map[string]float64{"A": 7, "B": 14, "C": 26, "D": 55, "E": 16, "F": 18, "G": 19} {
 		got, err := f.GetColWidth("Отчёт", column)
 		if err != nil || got != want {
@@ -77,15 +81,9 @@ func TestBuildExcelLightBusinessLayout(t *testing.T) {
 		t.Fatalf("long description row was not expanded: %.1f", height)
 	}
 
-	if formula, _ := f.GetCellFormula("Отчёт", "F7"); formula != "=200000/100" {
-		t.Fatalf("hourly rate changed: %q", formula)
-	}
-	if formula, _ := f.GetCellFormula("Отчёт", "G7"); formula != "=266667/100" {
-		t.Fatalf("entry amount changed: %q", formula)
-	}
-	if formula, _ := f.GetCellFormula("Отчёт", "G12"); formula != "=766667/100" {
-		t.Fatalf("monthly total changed: %q", formula)
-	}
+	assertNumericMoney(t, f, "F7", "2000")
+	assertNumericMoney(t, f, "G7", "2666.67")
+	assertNumericMoney(t, f, "G12", "7666.67")
 	money := cellStyle(t, f, "G7")
 	if money.CustomNumFmt == nil || *money.CustomNumFmt != "#,##0.00" {
 		t.Fatalf("unexpected money number format: %+v", money.CustomNumFmt)
@@ -95,6 +93,117 @@ func TestBuildExcelLightBusinessLayout(t *testing.T) {
 	if err != nil || !panes.Freeze || panes.YSplit != 6 || panes.TopLeftCell != "A7" {
 		t.Fatalf("unexpected freeze panes: %+v, %v", panes, err)
 	}
+}
+
+func TestBuildExcelThirteenEntryFinancialRegression(t *testing.T) {
+	month := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	minutes := []int64{65, 83, 57, 40, 51, 45, 35, 50, 60, 32, 30, 57, 90}
+	amounts := []int64{216667, 276667, 190000, 133333, 170000, 150000, 116667, 166667, 200000, 106667, 100000, 190000, 300000}
+	entries := make([]domain.WorkEntry, len(minutes))
+	for i := range minutes {
+		entries[i] = domain.WorkEntry{
+			ID: int64(i + 1), ProjectName: "ProjectHub", WorkDate: month.AddDate(0, 0, i),
+			Description: "Работа", DurationSeconds: minutes[i] * 60,
+			HourlyRateKopecks: 200000, AmountKopecks: amounts[i],
+		}
+	}
+
+	result, err := BuildExcel(month, "ProjectHub", entries, month)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Data) > 250_000 {
+		t.Fatalf("XLSX unexpectedly large: %d bytes", len(result.Data))
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(result.Data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	for i, amount := range amounts {
+		row := 7 + i
+		assertNumericMoney(t, f, cell("F", row), "2000")
+		assertNumericMoney(t, f, cell("G", row), rawRubles(amount))
+	}
+	assertNumericMoney(t, f, "G23", "23166.68")
+	if got, _ := f.GetCellValue("Отчёт", "E21"); got != "13" {
+		t.Fatalf("entry count = %q, want 13", got)
+	}
+	if got, _ := f.GetCellValue("Отчёт", "E22"); got != "11 ч 35 мин" {
+		t.Fatalf("total duration = %q, want 11 ч 35 мин", got)
+	}
+
+	xml := worksheetXML(t, result.Data)
+	if !strings.Contains(xml, `max="16384"`) {
+		t.Fatal("worksheet is missing compact full-width column style")
+	}
+	if cells := strings.Count(xml, "<c "); cells > 500 {
+		t.Fatalf("worksheet materialized too many cells: %d", cells)
+	}
+}
+
+func assertNumericMoney(t *testing.T, f *excelize.File, address, want string) {
+	t.Helper()
+	if cellType, err := f.GetCellType("Отчёт", address); err != nil || (cellType != excelize.CellTypeNumber && cellType != excelize.CellTypeUnset) {
+		t.Fatalf("%s type = %v, %v; want numeric", address, cellType, err)
+	}
+	if formula, _ := f.GetCellFormula("Отчёт", address); formula != "" {
+		t.Fatalf("%s must contain a backend value, got formula %q", address, formula)
+	}
+	got, err := f.GetCellValue("Отчёт", address, excelize.Options{RawCellValue: true})
+	if err != nil || got != want {
+		t.Fatalf("%s raw value = %q, %v; want %q", address, got, err, want)
+	}
+}
+
+func assertLightColumnStyle(t *testing.T, f *excelize.File, column string) {
+	t.Helper()
+	styleID, err := f.GetColStyle("Отчёт", column)
+	if err != nil || styleID == 0 {
+		t.Fatalf("column %s has no light default style: %d, %v", column, styleID, err)
+	}
+	style, err := f.GetStyle(styleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFill(t, style, "FFFFFF")
+	if style.Font == nil || sameColor(style.Font.Color, "FFFFFF") {
+		t.Fatalf("column %s default font is not dark: %+v", column, style.Font)
+	}
+}
+
+func worksheetXML(t *testing.T, data []byte) string {
+	t.Helper()
+	archive, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range archive.File {
+		if file.Name != "xl/worksheets/sheet1.xml" {
+			continue
+		}
+		reader, err := file.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer reader.Close()
+		content, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(content)
+	}
+	t.Fatal("worksheet XML not found")
+	return ""
+}
+
+func cell(column string, row int) string {
+	return column + fmt.Sprint(row)
+}
+
+func rawRubles(kopecks int64) string {
+	return strconv.FormatFloat(float64(kopecks)/100, 'f', -1, 64)
 }
 
 func cellStyle(t *testing.T, f *excelize.File, cell string) *excelize.Style {

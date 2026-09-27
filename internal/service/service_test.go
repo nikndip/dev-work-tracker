@@ -152,6 +152,31 @@ func TestMonthlyReportBoundariesAndExactSum(t *testing.T) {
 	}
 }
 
+func TestMonthlyReportSumsIndividuallyRoundedEntries(t *testing.T) {
+	loc := time.FixedZone("Europe/Moscow", 3*60*60)
+	minutes := []int64{65, 83, 57, 40, 51, 45, 35, 50, 60, 32, 30, 57, 90}
+	amounts := []int64{216667, 276667, 190000, 133333, 170000, 150000, 116667, 166667, 200000, 106667, 100000, 190000, 300000}
+	entries := make(map[int64]domain.WorkEntry, len(minutes))
+	for i := range minutes {
+		entries[int64(i+1)] = domain.WorkEntry{
+			WorkDate: time.Date(2026, 9, i+1, 0, 0, 0, 0, loc),
+			DurationSeconds: minutes[i] * 60,
+			AmountKopecks: amounts[i],
+		}
+	}
+
+	report, err := newTestService(&fakeRepo{entries: entries}).MonthlyReport(context.Background(), time.Date(2026, 9, 1, 0, 0, 0, 0, loc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.EntryCount != 13 || report.DurationSeconds != 41700 || report.AmountKopecks != 2316668 {
+		t.Fatalf("unexpected report totals: %+v", report)
+	}
+	if report.AmountKopecks == (200000*report.DurationSeconds+1800)/3600 {
+		t.Fatal("monthly amount must be the sum of individually rounded entries")
+	}
+}
+
 func TestTodayAndYesterdayUseMoscowCalendarDate(t *testing.T) {
 	location, err := time.LoadLocation("Europe/Moscow")
 	if err != nil {
